@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hundrelappens liv · økonomisk simulator</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;background:#0b1220;color:#e8edf7}*{box-sizing:border-box}body{margin:0}header,main,footer{max-width:1120px;margin:auto;padding:1.2rem}header h1{font-size:clamp(1.8rem,4vw,3rem);margin:.2em 0}p{color:#afbdd1} .layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:1rem}.panel{border:1px solid #29364b;border-radius:16px;padding:1.2rem;background:#131e30}.controls label{display:flex;justify-content:space-between;gap:1rem;margin-top:1rem;font-size:.91rem}.controls input{width:100%;accent-color:#7dd3fc}button{border:1px solid #4b627c;background:#1f334b;color:#fff;padding:.6rem .9rem;border-radius:8px;cursor:pointer}.buttons{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem}.card{background:#1d2c43;border-radius:11px;padding:.8rem}.card small{display:block;color:#b5c2d4}.card strong{font-size:1.35rem}.flow{display:grid;grid-template-columns:repeat(5,1fr);align-items:center;gap:8px;margin:1.5rem 0}.node{border-radius:10px;border:1px solid #405470;min-height:90px;padding:.7rem;font-size:.85rem;position:relative}.node::after{content:"→";position:absolute;right:-12px;top:34px;color:#8ed5ff}.node:last-child::after{content:""}.node b,.node span{display:block}.node span{color:#aabbd1}.legend{font-size:.82rem;color:#aabbd1}.bar{display:flex;height:26px;border-radius:7px;overflow:hidden}.bar>span{min-width:0}.bar>span:hover{filter:brightness(1.2)}canvas{width:100%;height:260px;background:#0d1728;border-radius:12px;margin-top:1rem}.two{display:grid;grid-template-columns:1fr 1fr;gap:1rem}table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{text-align:left;border-bottom:1px solid #334158;padding:.5rem}.note{font-size:.83rem;color:#b1bbce}.warning{color:#ffd08c}a{color:#93d7ff}@media(max-width:800px){.layout,.two{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.node{min-height:0}.node::after{content:"↓";right:12px;top:auto;bottom:-16px}}
+</style></head>
+<body>
+<header><small>REHT · eksperimentell samfunnsøkonomisk sandkasse</small><h1>Hundrelappens liv</h1><p>Endre én forutsetning. Se hvordan arbeid, skatt, forbruk, sparing og inflasjon henger sammen. All statistikk i denne demonstrasjonen er scenariodata, ikke et nasjonalt gjennomsnitt.</p></header>
+<main>
+<div class="layout">
+<section class="panel controls"><h2>Forutsetninger</h2>
+<label for="inflation">Inflasjon <output id="inflationV"></output></label><input id="inflation" type="range" min="0" max="10" step=".1" value="3.6">
+<label for="years">Tidshorisont <output id="yearsV"></output></label><input id="years" type="range" min="1" max="40" step="1" value="20">
+<label for="return">Nominell avkastning <output id="returnV"></output></label><input id="return" type="range" min="0" max="12" step=".1" value="5">
+<label for="overhead">Driftskostnadspåslag <output id="overheadV"></output></label><input id="overhead" type="range" min="0" max="80" step="1" value="35">
+<label for="margin">Driftsmargin <output id="marginV"></output></label><input id="margin" type="range" min="0" max="40" step="1" value="20">
+<label for="absence">Ekstra fraværskostnad per 100 netto <output id="absenceV"></output></label><input id="absence" type="range" min="0" max="30" step="1" value="8">
+<div class="buttons"><button id="reset">Nullstill</button><button id="download">Eksporter scenario (JSON)</button></div>
+<p class="note">2026-eksemplet er normalisert til 100 kroner netto lønn og 154,26 kroner direkte arbeidsgiverkostnad. Det er et enkelt arbeidstakereksempel, ikke en generell norsk skattesats.</p></section>
+<section class="panel"><h2>Fra verdiskaping til kjøpekraft</h2>
+<div class="cards">
+<div class="card"><small>Direkte arbeidskostnad</small><strong>154,26 kr</strong></div>
+<div class="card"><small>Salgsbehov eks. mva.</small><strong id="revenue"></strong></div>
+<div class="card"><small>Kjøpsverdi eks. 25 % mva.</small><strong>80,00 kr</strong></div></div>
+<div class="flow" aria-label="Illustrativ kjede"><div class="node"><b>Bedrift</b><span id="flowRevenue"></span></div><div class="node"><b>Arbeidskostnad</b><span>154,26 kr</span></div><div class="node"><b>Netto lønn</b><span>100 kr</span></div><div class="node"><b>Forbruk</b><span>100 kr</span></div><div class="node"><b>Mva.</b><span>20 kr</span></div></div>
+<h3>Hva består bedriftens salgsbehov av?</h3><div id="stacked" class="bar" role="img" aria-label="Fordeling av salgsbehov"></div><div id="legend" class="legend"></div><p class="note">Pensjon er utsatt kompensasjon, forsikring gir risikodekning og overskudd tilhører bedriften/eieren. Ingen av disse skal automatisk føres som skatt.</p>
+</section></div>
+<section class="panel" style="margin-top:1rem"><h2>Tre-sektor pengestrømsmodell</h2><p>En eksplisitt illustrasjon av kontantstrømmer mellom husholdning, bedrift og offentlig sektor. Modellen skaper ikke nye penger og beregner ikke BNP eller markedsrespons.</p><div class="cards"><div class="card"><small>Husholdning, sluttbalanse</small><strong id="sectorHousehold"></strong></div><div class="card"><small>Bedrift, sluttbalanse</small><strong id="sectorBusiness"></strong></div><div class="card"><small>Offentlig sektor, sluttbalanse</small><strong id="sectorGovernment"></strong></div></div><p id="sectorFlows" class="note"></p><p id="sectorConservation" class="note"></p></section>
+<div class="two" style="margin-top:1rem">
+<section class="panel"><h2>100 kroner gjennom tid</h2><div class="cards"><div class="card"><small>Kontant, realverdi</small><strong id="cash"></strong></div><div class="card"><small>Bank, realverdi</small><strong id="bank"></strong></div><div class="card"><small>Aksjer, realverdi</small><strong id="shares"></strong></div></div><canvas id="chart" width="760" height="300" role="img" aria-label="Reell kjøpekraft etter år"></canvas><p class="note">Bank: renter skattlegges hvert år med 22 %. Aksjer: nominell gevinst skattlegges med 37,84 % ved salg etter valgt antall år. Ingen skjerming, formuesskatt, gebyrer eller risikojustering.</p></section>
+<section class="panel"><h2>Regnskap uten dobbeltelling</h2><table><tbody id="ledger"></tbody></table><p class="note">Salgsinntekt er ikke identisk med nasjonal verdiskaping. Produksjonskostnader og margin er ikke skatteinntekter. Merverdiavgift på et sluttkjøp er 20 av 100 kroner; butikken innbetaler nettobeløpet etter fradrag for inngående avgift.</p><h3>Hva kan modellen si?</h3><p>Den viser konsekvensene av valgte, forenklede forutsetninger. Den beregner <strong>ikke</strong> hvor mange nasjonale verdiskapingskroner som trengs per privat krone, og den priser ikke offentlige motytelser.</p><p class="warning">Kausalitet, lønnsrespons, renteendringer og atferd er ikke modellert. Endring av inflasjon simulerer ikke automatisk andre makroøkonomiske virkninger.</p></section></div>
+</main>
+<footer class="note">Kilder for kontroll av satser: <a href="https://www.skatteetaten.no/satser/">Skatteetaten – satser</a>, <a href="https://www.altinn.no/starte-og-drive/arbeidsforhold/ansettelse/hva-koster-en-arbeidstaker/">Altinn – arbeidstakerkostnad</a>, <a href="https://www.ssb.no/priser-og-prisindekser/konsumpriser">SSB – konsumpriser</a>. Satsene er eksplisitte scenarioforutsetninger og må oppdateres ved regelendringer.</footer>
+<script src="./economy-model.js"></script>
+<script>
+"use strict";
+const defaults={inflation:3.6,years:20,return:5,overhead:35,margin:20,absence:8};
+const ids=Object.keys(defaults);
+const byId=id=>document.getElementById(id);
+const money=n=>n.toLocaleString("nb-NO",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr";
+const pct=n=>n.toLocaleString("nb-NO",{maximumFractionDigits:1})+" %";
+function calc(s){
+ const direct=154.26, incomeTax=31.83, employerTax=18.96, pension=2.61, insurance=.86;
+ const cost=direct*(1+s.overhead/100)+s.absence;
+ const revenue=cost/(1-s.margin/100),profit=revenue-cost,operating=cost-direct;
+ const deflator=y=>Math.pow(1+s.inflation/100,y);
+ const nominal=y=>100*Math.pow(1+s.return/100,y);
+ const bank=y=>100*Math.pow(1+s.return/100*(1-.22),y)/deflator(y);
+ const shares=y=>(100+Math.max(0,nominal(y)-100)*(1-.3784)+Math.min(0,nominal(y)-100))/deflator(y);
+ return {direct,incomeTax,employerTax,pension,insurance,cost,revenue,profit,operating,deflator,bank,shares,cash:y=>100/deflator(y)};
+}
+function validate(s,r){
+ if(!Object.values(s).every(Number.isFinite))throw Error("Ugyldige tall");
+ if(!(s.margin>=0&&s.margin<100&&s.years>=1))throw Error("Ugyldig scenario");
+ if(Math.abs((100+r.incomeTax+r.employerTax+r.pension+r.insurance)-r.direct)>.011)throw Error("Arbeidskostnad stemmer ikke");
+ if(Math.abs((r.direct+r.operating+r.profit)-r.revenue)>1e-7)throw Error("Dobbeltelling");
+ if(Math.abs((r.revenue-r.cost)/r.revenue-s.margin/100)>1e-7)throw Error("Margin feil");
+ return true;
+}
+const round=n=>Math.round(n*100)/100;
+function render(){
+ const s=Object.fromEntries(ids.map(id=>[id,Number(byId(id).value)]));
+ const r=calc(s);validate(s,r);
+ for(const id of ids){byId(id+"V").textContent=id==="years"?s[id]+" år":id==="absence"?money(s[id]):pct(s[id]);}
+ byId("revenue").textContent=money(r.revenue);byId("flowRevenue").textContent=money(r.revenue);
+ byId("cash").textContent=money(r.cash(s.years));
+ byId("bank").textContent=money(r.bank(s.years));
+ byId("shares").textContent=money(r.shares(s.years));
+ const parts=[["Netto lønn",100,"#60a5fa"],["Personskatt",r.incomeTax,"#e69b56"],["Arbeidsgiveravgift",r.employerTax,"#e9be65"],["Pensjon",r.pension,"#a78bfa"],["Yrkesskadeforsikring",r.insurance,"#c4b5fd"],["Drift / fravær",r.operating,"#94a3b8"],["Driftsresultat",r.profit,"#34d399"]];
+ byId("stacked").innerHTML=parts.map(p=>'<span style="background:'+p[2]+';width:'+(p[1]/r.revenue*100)+'%" title="'+p[0]+': '+money(p[1])+'"></span>').join("");
+ byId("legend").textContent=parts.map(p=>p[0]+": "+money(p[1])).join(" · ");
+ const ledger=[["Netto arbeidstaker",100],["Personskatt",r.incomeTax],["Arbeidsgiveravgift",r.employerTax],["Pensjon + forsikring",r.pension+r.insurance],["Drift og ekstra fravær",r.operating],["Driftsresultat",r.profit],["Sum salgsbehov",r.revenue]];
+ byId("ledger").innerHTML=ledger.map(([name,num])=>'<tr><td>'+name+'</td><td>'+money(num)+'</td></tr>').join("");
+ draw(s,r);
+ const sectors=HundrelappEconomy.step({});
+ byId("sectorHousehold").textContent=money(sectors.balances.household);
+ byId("sectorBusiness").textContent=money(sectors.balances.business);
+ byId("sectorGovernment").textContent=money(sectors.balances.government);
+ byId("sectorFlows").textContent="Bruttolønn: 500 kr · Nettolønn: 380 kr · Sluttforbruk: 200 kr · Mva.: 40 kr · Inntektsskatt: 120 kr · Arbeidsgiveravgift: 70 kr";
+ byId("sectorConservation").textContent="Sum før: "+money(sectors.starting)+" · Sum etter: "+money(sectors.ending)+" · Differanse: "+money(sectors.ending-sectors.starting);
+
+ window.__currentScenario={assumptions:s,results:{directCost:round(r.direct),revenue:round(r.revenue),operating:round(r.operating),profit:round(r.profit),cashReal:round(r.cash(s.years)),bankReal:round(r.bank(s.years)),sharesReal:round(r.shares(s.years))},disclaimer:"Illustrative scenario. Not a forecast or national aggregate."};
+}
+function draw(s,r){
+ const canvas=byId("chart"),ctx=canvas.getContext("2d"),W=canvas.width,H=canvas.height,pad={l:52,r:16,t:22,b:35};
+ ctx.clearRect(0,0,W,H);const max=Math.max(110,...Array.from({length:s.years+1},(_,y)=>Math.max(r.cash(y),r.bank(y),r.shares(y))))*1.07;
+ const X=y=>pad.l+y/s.years*(W-pad.l-pad.r),Y=v=>H-pad.b-v/max*(H-pad.t-pad.b);
+ ctx.font="13px system-ui";ctx.strokeStyle="#34435a";ctx.fillStyle="#b9c8de";
+ for(let j=0;j<=4;j++){const value=max*j/4;ctx.beginPath();ctx.moveTo(pad.l,Y(value));ctx.lineTo(W-pad.r,Y(value));ctx.stroke();ctx.fillText(Math.round(value)+" kr",4,Y(value)+4);}
+ for(let j=0;j<=4;j++){const yr=Math.round(s.years*j/4);ctx.fillText(yr+" år",X(yr)-12,H-10);}
+ for(const [name,fn,color] of [["Kontant",r.cash,"#f59e63"],["Bank",r.bank,"#60a5fa"],["Aksjer",r.shares,"#34d399"]]){
+ ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=3;
+ for(let y=0;y<=s.years;y++){const x=X(y),z=Y(fn(y));y===0?ctx.moveTo(x,z):ctx.lineTo(x,z);}
+ ctx.stroke();
+ }
+ ctx.fillStyle="#f59e63";ctx.fillText("Kontant",W-245,16);ctx.fillStyle="#60a5fa";ctx.fillText("Bank",W-160,16);ctx.fillStyle="#34d399";ctx.fillText("Aksjer",W-80,16);
+}
+for(const id of ids)byId(id).addEventListener("input",render);
+byId("reset").addEventListener("click",()=>{for(const id of ids)byId(id).value=defaults[id];render();});
+byId("download").addEventListener("click",()=>{
+ const blob=new Blob([JSON.stringify(window.__currentScenario,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="hundrelapp-scenario.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),0);
+});
+render();
+window.__runSelfTests=()=>{
+ const s={...defaults},r=calc(s);validate(s,r);
+ const close=(a,b)=>Math.abs(a-b)<.02;
+ if(!close(r.revenue,270.3225))throw Error("Revenue baseline mismatch "+r.revenue);
+ if(!close(r.cash(0),100))throw Error("Cash zero years mismatch");
+ if(!close(r.cash(10),100/Math.pow(1.036,10)))throw Error("Inflation math mismatch");
+ if(!close(r.bank(1),103.9/1.036))throw Error("Deposit tax mismatch");
+ if(!close(r.shares(1),103.108/1.036))throw Error("Share tax mismatch");
+ if(!close((r.revenue-r.cost)/r.revenue,.2))throw Error("Margin mismatch");
+ if(HundrelappEconomy.selfTest()!=="9 checks passed")throw Error("sector verification");
+ return "15 checks passed";
+};
+</script>
+<script src="./dynamic-economy.js"></script>
+<script src="./dynamic-ui.js"></script>
+<script src="./visual-scene.js"></script>
+</body></html>
