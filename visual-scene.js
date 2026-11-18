@@ -56,7 +56,7 @@ const flowValue={};
 const sceneRows=document.createElement("div");
 sceneRows.id="sceneLedger";
 sceneRows.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.35rem;font-size:.86rem";
-const fmt=n=>n.toLocaleString("nb-NO",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr";
+const fmt=n=>(Math.abs(n)<0.005?0:n).toLocaleString("nb-NO",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr";
 for(const item of flows){
  const from=positions[item.start],to=positions[item.end];
  const a={x:from.x+70,y:from.y+32},b={x:to.x+70,y:to.y+32};
